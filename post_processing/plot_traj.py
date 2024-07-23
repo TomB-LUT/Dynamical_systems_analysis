@@ -1,11 +1,11 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-a = np.loadtxt('trajectory.txt')
+a = np.loadtxt('results\\trajectory.txt')
 #aa = np.loadtxt('trajectory_old.txt')
-#a = np.round(a,5)
-b = np.loadtxt('poincare_map.txt').transpose()
-#b = np.transpose(b)
+b = np.loadtxt('results\\poincare_matrix.txt').transpose()
+
+
 
 
 ofset = 0 
@@ -15,7 +15,7 @@ fig, ax = plt.subplots()
 #ax.scatter(a[bb:,0], a[bb:,1], s = 1, c = 'blue')
 ax.plot(a[ofset:,0], a[ofset:,1],c = 'blue')
 #ax.plot(aa[bb:,0], aa[bb:,1],linestyle='dashed',c = 'green')
-ax.scatter(b[:,-1], b[:,0], c='red')
+ax.scatter(b[:,0], b[:,1], c='red')
 plt.show()
 
 fig, ax = plt.subplots()

@@ -11,11 +11,11 @@ Maxmaps = 20
 
 poincare_distance = 0.0005
 workers = cpu_count()-12
-poincare_t = 0.25
+poincare_t = 0.5
 do_marker = True
 sys_type = 1 # 2 - autonomiczny, 1 - nieautonomiczny 
-dim = 4
+max_period = 6
 save_poincare = True
-error_check = False
+error_check = True
 integration_algorithm = rk4_np
 poincare_iter = 2

@@ -1,7 +1,9 @@
+import time
 import numpy as np
 from functions.rk4 import rk4_np 
 import config2 as cfg
 from math import sqrt
+from special_containers import PoincareMatrix
 from julia import Main
 Main.include('functions/rk4.jl')
 
@@ -107,7 +109,7 @@ class Periodic_NA(FixedPoint):
     def __init__(self, DynSys):
         super().__init__(DynSys)
         self.period_of_system = DynSys.tspan[3] 
-        self.poincare_matrix = tuple([[] for _ in range(self.sys_dim+1)])
+        self.poincare_matrix = PoincareMatrix(self.sys_dim)
         self.period = -1
         self.well = -1
         self.attractor = 0 #To poprostu może stwórz klase macierz markerów i bedzie dodawana. A może instacje markera zrobić jak obserwatorów
@@ -142,12 +144,20 @@ class Periodic_NA(FixedPoint):
             if cfg.error_check and y_out[0] > 1_000:
                 print(f'Possible RuntimeWarning dla za mały czas całkowania dla {[self.par[x] for x in self.parToSave]}, sprawdź czy nie za mała wartość threshold, RuntimeWarning są wyłączone')
                 break
-            self.poincare(t, y, i)
-            if self.check_periodicity():
+
+            if t > cfg.poincare_t*self.tf_NA and i%self.step == 0:
+                self.poincare_matrix.push([t,*y])
+                #print(self.poincare_matrix)
+                #print(len(self.poincare_matrix))
+                #time.sleep(1)
+
+            if self.poincare_matrix.periodicity_found():
+                self.period = self.poincare_matrix.periodicity_found()
                 self.marker(rk4_np, y_out, t+self.dt_NA, self.dt_NA)
                 t_sim = t_sim[0:i]
                 y_arr = y_arr[0:i]
                 break
+
             y = y_out
             
 
@@ -161,7 +171,7 @@ class Periodic_NA(FixedPoint):
         self._marker_list.append(self.attractor)
         
         if cfg.no_of_sampels == 1:
-            self.save_poincare()
+            self.poincare_matrix.save_to_txt()
 
     def poincare(self, t_curr, y_p,  i):
         if t_curr > cfg.poincare_t*self.tf_NA and i%self.step == 0:

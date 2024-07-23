@@ -8,33 +8,40 @@ class LengthError(Exception):
     pass
 
 
-class PoincareMap:
+class PoincareMatrix:
 
 
     def __init__(self, dimension, max_maps=20):
         self.dimension = dimension
         self.max_maps = max_maps
-        self.p_map = [[] for _ in range(self.dimension+1)]
+        self.p_mat = [[] for _ in range(self.dimension+1)]
+
+    def __len__(self):
+        return len(self.p_mat[0])
+
+    def __str__(self):
+        return f'{[ print(["{:10.5f}".format(e) for e in row]) for row in self.p_mat ]}'
+    
 
     #def __repr__(self):
     #    [print(row) for row in self.p_map]
     #    return None
 
     def push(self,vector):
-        if len(vector) != len(self.p_map):
-            raise LengthError('State vector must be the same length as poincare map')
+        if len(vector) != len(self.p_mat):
+            raise LengthError('State vector must be the same length as poincare matrix rows number')
         
         if not self.is_complete:
-            for element, row in zip(vector, self.p_map):
+            for element, row in zip(vector, self.p_mat):
                 row.append(element)
 
     def remove_first(self):
-        for row in self.p_map:
+        for row in self.p_mat:
             row.pop(0)
     
     @property
     def is_complete(self):
-        return len(self.p_map) == self.max_maps
+        return len(self) == self.max_maps
 
     def find_period(self, row, ref=0):
         counter = 0 
@@ -60,12 +67,12 @@ class PoincareMap:
         #print(position)
         return -1 
     
-    def check_periodicity_2(self):
-        #if not self.is_complete:
-        #    return False
+    def periodicity_found_2(self):
+        if not self.is_complete:
+            return False
 
         temp_check = [self.find_period(row) == self.find_period(row, ref=1) for row in self.p_map[1:] ]
-        print(temp_check)
+        #print(temp_check)
         
         if all(temp_check):
             
@@ -80,18 +87,16 @@ class PoincareMap:
             self.remove_first()
             return False
 
-    def check_periodicity(self):
-        #if not self.is_complete:
-        #    return False
-
+    def periodicity_found(self):
+        if not self.is_complete:
+            return False
 
         counter = 0 
         ref = 0 
         period = 1
-        max_period = 5
-        np_p_map = np.array(self.p_map)
-        for _ in range(max_period):
-            if all( (np_p_map[:,ref] - np_p_map[:,ref+period]) < cfg.poincare_distance ):
+        np_p_mat = np.array(self.p_mat[1:])
+        for _ in range(cfg.max_period):
+            if all( np.absolute(np_p_mat[:,ref] - np_p_mat[:,ref+period]) < cfg.poincare_distance ):
                 counter +=1
                 ref = period
             else: 
@@ -104,22 +109,35 @@ class PoincareMap:
         else:
             self.remove_first()
             return False
+        
+    def save_to_txt(self):
+        with open('results\\poincare_matrix.txt', 'w') as p_file:
+            for i in range(len(self.p_mat)): 
+                for j in range(len(self.p_mat[i])):
+                    p_file.writelines(str(self.p_mat[i][j]) +' ')
+                p_file.writelines('\n')
+            
 
 
 
 
 
 
-pm_2 = PoincareMap(3)
+
+
+
+'''
+pm_2 = PoincareMatrix(3)
 for _ in range(10):
     pm_2.push([1,9,1,7])
     pm_2.push([1,2,4,6])
     pm_2.push([1,2,2,9])
     pm_2.push([1,2,4,6])
-
+print(pm_2)
 
 #[print(row) for row in pm_2.p_map]
 #print(pm_2.check_periodicity())
-print(pm_2.check_periodicity_2())
+#print(pm_2.periodicity_found_2())
 
 
+'''

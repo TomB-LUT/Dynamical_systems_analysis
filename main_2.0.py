@@ -57,10 +57,11 @@ def main_concurent(system_type, system):
         print(f'save time: {time.time()-start1}')
 
 def main_single( system_type, system):
+    
     try:
         sample = system_type(system())
         sample.integrate_fixed_step()
-    except TypeError as e:
+    except NotImplementedError as e:
         print('Not all required methods implemented!!!!. Details: '.upper())
         print(e)
 
@@ -81,13 +82,13 @@ if __name__ == "__main__":
 
     
     fast_del =  not os.path.isfile('results\\trajectory.txt') or os.remove('results\\trajectory.txt')
-    fast_del =  not os.path.isfile('results\\poincare_map.txt') or os.remove('results\\poincare_map.txt')
+    fast_del =  not os.path.isfile('results\\poincare_matrix.txt') or os.remove('results\\poincare_matrix.txt')
     fast_del =  not os.path.isfile('results\\one_period.txt') or os.remove('results\\one_period.txt')
 
         
 
-    main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
-    #main_single( system_type = Periodic_NA, system = LiNonDim2023 )
+    #main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
+    main_single( system_type = Periodic_NA, system = LiNonDim2023 )
     #sample = Periodic_NA(LiNonDim2023())
     #print(sample.tf)
     #print(sample.__dict__)

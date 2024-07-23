@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 a = np.loadtxt('results\\one_period.txt')
 #a_old = np.loadtxt('one_period_old.txt')
-b = np.loadtxt('results\\poincare_map.txt').transpose()
+b = np.loadtxt('results\\poincare_matrix.txt').transpose()
 
 #print(a[1,1]-a[-1,1])
 
@@ -22,5 +22,5 @@ fig, ax = plt.subplots()
 #ax.plot(a[:400,1], a[:400,2]) 
 ax.plot(a[:,1], a[:,2])
 #ax.plot(a_old[:,1], a_old[:,2])
-ax.scatter(b[10:,0], b[10:,1], c='red')
+ax.scatter(b[:,1], b[:,2], c='red')
 plt.show()
