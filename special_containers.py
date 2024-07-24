@@ -10,7 +10,6 @@ class LengthError(Exception):
 
 class PoincareMatrix:
 
-
     def __init__(self, dimension, max_maps=20):
         self.dimension = dimension
         self.max_maps = max_maps
@@ -21,11 +20,6 @@ class PoincareMatrix:
 
     def __str__(self):
         return f'{[ print(["{:10.5f}".format(e) for e in row]) for row in self.p_mat ]}'
-    
-
-    #def __repr__(self):
-    #    [print(row) for row in self.p_map]
-    #    return None
 
     def push(self,vector):
         if len(vector) != len(self.p_mat):
@@ -87,7 +81,7 @@ class PoincareMatrix:
             self.remove_first()
             return False
 
-    def periodicity_found(self):
+    def periodicity_found(self, sample):
         if not self.is_complete:
             return False
 
@@ -104,6 +98,7 @@ class PoincareMatrix:
                 counter = 0 
                 
             if counter == cfg.poincare_iter:
+                sample.period = period
                 return period
             
         else:
@@ -116,6 +111,43 @@ class PoincareMatrix:
                 for j in range(len(self.p_mat[i])):
                     p_file.writelines(str(self.p_mat[i][j]) +' ')
                 p_file.writelines('\n')
+
+class Marker:
+    
+    def __init__(self,value,marker_list):
+        self._value = value
+        marker_list.append(self)
+
+    @property
+    def value(self):
+        return self._value
+    
+    @value.setter
+    def value(self,value):
+        self._value = value
+
+    @classmethod
+    def marker(cls, integration_algorithm, yM, t, dtM, marker_list, Dyn_Sys): #Czy przez eval trzebaby liczyć charakterystyczne markery?
+        time_M = np.arange(t, t+(DynSys.tspan[3]*marker_list.period), dtM)
+        y_ref = yM[0]
+        yM_arr = np.zeros((len(time_M),sys_dim))
+
+        for i, tM in enumerate(time_M):
+            yM_arr[i,:] = yM
+            y_outM = integration_algorithm(self.RHS, yM, tM, dtM, self.par, self.tf_NA)
+            yM = y_outM 
+
+class MarkerList:
+    def __init__(self):
+        self.marker_list = []
+    
+    def append_marker(self,marker_object):
+        self.marker_list.append(marker_object)
+
+    def return_markers(self):
+        return [marker.value for marker in self.marker_list]
+
+
             
 
 

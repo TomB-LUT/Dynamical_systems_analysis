@@ -68,7 +68,13 @@ end
     
     end
 
+    
+    function derivs(y, t, par)
+        eval(Meta.parse(raw_eq))
+        return dydt
+    end
 
+    raw_eq = "p1, = par\ndydt = [y[1], -p1*y[1]+y[0]-pow(y[0],3)]"  
     time = t0:dt:tf
     num_steps = length(time)
     y_arr = zeros(num_steps, length(init_cond))
@@ -79,19 +85,9 @@ end
     for i in 1:num_steps
         y_arr[i, :] .= y
         rk4_np!(derivs_Li_MSSP_2023_nondim, y, time[i], dt, par, y_out)
-        #do_poincare!(poincare_tuple[1], time[i]+dt, tf, y_out, i, step, max_maps)
-        #if check_periodicity(poincare_tuple[1], max_maps) > 0 
-        #    println("Here")
-        #    marker(y_out, t+dt, dt)
-        #    time = time[1:i]
-        #    y_arr = y_arr[1:i, :]
-        #    break
-    #    end
         y .= y_out
     end
-    return y_arr, time
-    
-    #return time
+    return hcat(time, y_arr)
 
 end
 

@@ -18,6 +18,9 @@ class MonteCarloSim(ABC):
     @abstractmethod
     def set_IC(self):
         pass
+
+    def par_to_save(self):
+        return None
     #Otrzymuje parametry, równania, tspan, IC
     #Jak potrzeba losuje par i IC <--- to ręcznie ustawiane?
     #Wywołuje obie SameImportedClass przesyłając par, f, tspan, IC 

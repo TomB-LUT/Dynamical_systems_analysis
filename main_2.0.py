@@ -57,10 +57,10 @@ def main_concurent(system_type, system):
         print(f'save time: {time.time()-start1}')
 
 def main_single( system_type, system):
-    
+    start = time.time()
     try:
         sample = system_type(system())
-        sample.integrate_fixed_step()
+        sample.integrate_julia()
     except NotImplementedError as e:
         print('Not all required methods implemented!!!!. Details: '.upper())
         print(e)
@@ -70,7 +70,7 @@ def main_single( system_type, system):
     except AttributeError as e:
         print(e)
         quit()
-
+    print(time.time()-start)
     save_traj(res)
 
     figure = plt.figure()
@@ -86,9 +86,10 @@ if __name__ == "__main__":
     fast_del =  not os.path.isfile('results\\one_period.txt') or os.remove('results\\one_period.txt')
 
         
-
-    #main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
-    main_single( system_type = Periodic_NA, system = LiNonDim2023 )
+    start = time.time()
+    main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
+    print(time.time()-start)
+    #main_single( system_type = Periodic_NA, system = LiNonDim2023 )
     #sample = Periodic_NA(LiNonDim2023())
     #print(sample.tf)
     #print(sample.__dict__)

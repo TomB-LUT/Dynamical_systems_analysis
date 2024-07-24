@@ -7,28 +7,23 @@ from special_containers import PoincareMatrix
 from julia import Main
 Main.include('functions/rk4.jl')
 
-class Sample():
-    pass
+class LimitSet():
 
-class FixedPoint():
-    '''
-    For fixed point the tspan list is: 
-    tspan[0] = t0
-    tspan[1] = tf
-    tspan[2] = dt
-    '''
-
-    def __init__(self, DynSys, integrator=None):
+    def __init__(self, DynSys):
         self.init_cond = DynSys.init_cond
         self.par = DynSys.par
         self.RHS = DynSys.f
         self.sys_dim = len(self.init_cond) 
         self._marker_list = []
-        self.parToSave = DynSys.parToSave
+        self.parToSave = DynSys.par_to_save()
         self._t0 = DynSys.tspan[0] 
         self._tf = DynSys.tspan[1] 
         self._dt = DynSys.tspan[2]
-
+        self._marker_list.append(self._t0)
+        self._marker_list.extend([x for x in self.init_cond])
+        if self.parToSave != None:
+            self._marker_list.extend([self.par[x] for x in self.parToSave])
+    
     @property
     def t0(self):
         return self._t0
@@ -52,15 +47,23 @@ class FixedPoint():
     @dt.setter
     def dt(self, value):
         self._dt = value
+    
+    @property
+    def marker_list(self):
+        return self._marker_list
 
+
+class FixedPoint(LimitSet):
+    '''
+    For fixed point the tspan list is: 
+    tspan[0] = t0
+    tspan[1] = tf
+    tspan[2] = dt
+    '''
     def integrate_fixed_step(self):
         t_sim = np.arange(self._t0, self._t0 + self._tf , self._dt)
         y_arr = np.zeros((len(t_sim),self.sys_dim))
         y = self.init_cond
-
-        self._marker_list.append(self._t0)
-        self._marker_list.extend([x for x in self.init_cond])
-        self._marker_list.extend([self.par[x] for x in self.parToSave])
 
         for i,t in enumerate(t_sim):
             y_arr[i,:] = y
@@ -68,14 +71,9 @@ class FixedPoint():
             y = y_out
 
         self._y_arr = np.hstack((t_sim[:,np.newaxis],y_arr))
-        self._marker_list.extend([int(x) for x in y_arr[-1,:]])
+        self._marker_list.extend([round(x) for x in y_arr[-1,:]])
     
-    def integrate_brute_force_julia(self):
-        #timeJ = np.arange(self.t0, self.t0+self.tf ,self.dt)
-        #y_arrJ = np.zeros((len(timeJ), self.sys_dim))
-        
-        self._marker_list.append(self.t0)
-        self._marker_list.extend([x for x in self.init_cond])
+    def integrate_julia(self):
         
         Main.par = self.par
         Main.init_cond = self.init_cond
@@ -83,28 +81,22 @@ class FixedPoint():
         Main.tf = self.t0+self.tf
         Main.dt = self.dt
 
-        res = Main.eval("integration(par, init_cond, t0, tf, dt)")
-        self._marker_list.extend(res[-1,1:])
-        #y_arrJ =  res[0]
-        #timeJ = np.array(res[1])
+        self._y_arr = Main.eval("integration(par, init_cond, t0, tf, dt)")
+        self._marker_list.extend([round(x) for x in self._y_arr[-1,1:]])
 
     @property
     def y_arr(self):
         print(self._marker_list)
         return self._y_arr
-    
-    @property
-    def marker_list(self):
-        return self._marker_list
 
 
-class Periodic_NA(FixedPoint):
+class Periodic_NA(LimitSet):
     '''
     For Periodic_NA the tspan list is: 
     tspan[0] = t0
-    tspan[1] = periods_no
-    tspan[2] = step
-    tspan[3] = period_of_system
+    tspan[1] = number of periods to calculate
+    tspan[2] = time step
+    tspan[3] = period of system
     '''
     def __init__(self, DynSys):
         super().__init__(DynSys)
@@ -129,15 +121,20 @@ class Periodic_NA(FixedPoint):
     def step(self):
         return self._dt
 
-    def integrate_fixed_step(self):
-        t_sim = np.arange(self._t0, self._t0 + self.tf_NA , self.dt_NA)
+    def integrate_fixed_step(self, start_time = None, start_y_arr = None):
+
+        if start_time == None:
+            t_sim = np.arange(self.t0, self.t0+self.tf_NA ,self.dt_NA)
+        else: 
+            t_sim = np.arange(start_time, start_time+round(self.tf_NA/20) ,self.dt_NA)
+
+        if not isinstance(start_y_arr,np.ndarray):
+            y = self.init_cond
+        else: 
+            y = start_y_arr
+
         y_arr = np.zeros((len(t_sim),self.sys_dim))
-        y = self.init_cond
-
-        self._marker_list.append(self._t0)
-        self._marker_list.extend([x for x in self.init_cond])
-        self._marker_list.extend([self.par[x] for x in self.parToSave])
-
+        
         for i,t in enumerate(t_sim):
             y_arr[i,:] = y
             y_out = rk4_np(self.RHS, y, t, self.dt_NA, self.par, self.tf_NA)
@@ -147,12 +144,8 @@ class Periodic_NA(FixedPoint):
 
             if t > cfg.poincare_t*self.tf_NA and i%self.step == 0:
                 self.poincare_matrix.push([t,*y])
-                #print(self.poincare_matrix)
-                #print(len(self.poincare_matrix))
-                #time.sleep(1)
 
-            if self.poincare_matrix.periodicity_found():
-                self.period = self.poincare_matrix.periodicity_found()
+            if self.poincare_matrix.periodicity_found(self):
                 self.marker(rk4_np, y_out, t+self.dt_NA, self.dt_NA)
                 t_sim = t_sim[0:i]
                 y_arr = y_arr[0:i]
@@ -160,7 +153,6 @@ class Periodic_NA(FixedPoint):
 
             y = y_out
             
-
         self._y_arr = np.hstack((t_sim[:,np.newaxis],y_arr))
         
         self._marker_list.append(self.period)
@@ -173,54 +165,21 @@ class Periodic_NA(FixedPoint):
         if cfg.no_of_sampels == 1:
             self.poincare_matrix.save_to_txt()
 
-    def poincare(self, t_curr, y_p,  i):
-        if t_curr > cfg.poincare_t*self.tf_NA and i%self.step == 0:
-            if len(self.poincare_matrix[0]) < cfg.Maxmaps: 
-                for i in range(self.sys_dim):
-                    self.poincare_matrix[i].append(y_p[i])
-                else:
-                    self.poincare_matrix[-1].append(t_curr)
-    
-    def check_periodicity(self):
-        if len(self.poincare_matrix[0]) == cfg.Maxmaps:
-            if self.find_period(self.poincare_matrix[0]) == self.find_period(self.poincare_matrix[0], ref = 1) and \
-                self.find_period(self.poincare_matrix[1]) == self.find_period(self.poincare_matrix[1], ref = 1) and \
-                self.find_period(self.poincare_matrix[0]) != -1:
-                
-                self.period = max(self.find_period(self.poincare_matrix[1]), self.find_period(self.poincare_matrix[0]))
-                return True #if self.period !=-1 else False
-            else: 
-                for i in range(self.sys_dim+1): # +1 bo jeszcze czas jest na końcu w poincare_matrix
-                    try:
-                        self.poincare_matrix[i].pop(0)
-                    except:
-                        pass
-                return False
-        else:
-            return False
-        
-    def find_period(self, poincareMap,  ref=0):
-        suma = 0 
-        a_old = 0 
+    def integrate_julia(self):
+        Main.par = self.par
+        Main.init_cond = self.init_cond
+        Main.t0 = self.t0
+        Main.tf = self.t0+self.tf_NA
+        Main.dt = self.dt_NA
 
-        for i in range(ref+1,len(poincareMap)):
-            distance = sqrt( (poincareMap[ref] - poincareMap[i])*(poincareMap[ref] - poincareMap[i]) ) 
-            if distance < cfg.poincare_distance :
-                a = i-ref 
-                ref = i
-                #print(f'suma: {suma} ')
-                #print(f'distance: {distance}, cfg.distance: {cfg.poincare_distance}, {distance < cfg.poincare_distance}')
-                #print(f'a: {a}, a_old: {a_old}')
-                if a == a_old: 
-                    suma +=1
-                else: 
-                    suma = 0
-                a_old = a
+        res = Main.eval("integration(par, init_cond, t0, tf, dt)")
+        self.integrate_fixed_step(res[-1,0], res[-1,1:])
 
-            if suma == 2 : 
-                return a
-        return -1 
-    
+    @property
+    def y_arr(self):
+        print(self._marker_list)
+        return self._y_arr
+
     def marker(self, integration_algorithm, yM, t, dtM):
 
         time_M = np.arange(t, t+(self.period_of_system*self.period), dtM)
@@ -250,12 +209,7 @@ class Periodic_NA(FixedPoint):
         if cfg.no_of_sampels == 1:
             np.savetxt('results\\one_period.txt', yM_arr, delimiter=' ', fmt='%.6f')
 
-    def save_poincare(self):
-        with open('results\\poincare_map.txt', 'w') as p_file:
-            for i in range(len(self.poincare_matrix)): 
-                for j in range(len(self.poincare_matrix[i])):
-                    p_file.writelines(str(self.poincare_matrix[i][j]) +' ')
-                p_file.writelines('\n')
+
 
 
     
