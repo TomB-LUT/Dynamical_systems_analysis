@@ -9,14 +9,16 @@ import time
 import os
 
 completed = 0 
-def save_marker(data, my_class=None):    
-    file_handler = open('results\\marker.txt', 'w')
-    for i in range(len(data)):
-        for j in range(len(data[i])):
-            file_handler.writelines(str(data[i][j]) + ' ')
-        file_handler.writelines('\n')
-    file_handler.close()
-
+def save_marker(data):
+    rows = np.array([list(row.values()) for row in data])  
+    #print(rows)
+    np.savetxt('results\\marker.txt',rows, delimiter=' ', fmt='%.6f')
+    
+    #with open('results\\marker.txt', 'w') as file_handler:
+    #    for i in range(len(rows)):
+    #        for j in range(len(rows[i])):
+    #            file_handler.writelines(str(rows[i][j]) + ' ')
+    #        file_handler.writelines('\n')
 
 def save_traj(data):
     np.savetxt('results\\trajectory.txt',data, delimiter=' ', fmt='%.6f')
@@ -31,7 +33,7 @@ def progress_indicator(result):
 
 def execute_obj(system_type, system):
     sample = system_type(system())
-    sample.integrate_fixed_step()
+    sample.integrate_julia()
     if cfg.no_of_sampels == 1:
         return sample.y_arr
     else: 
@@ -80,15 +82,13 @@ def main_single( system_type, system):
 
 if __name__ == "__main__":
 
-    
     fast_del =  not os.path.isfile('results\\trajectory.txt') or os.remove('results\\trajectory.txt')
     fast_del =  not os.path.isfile('results\\poincare_matrix.txt') or os.remove('results\\poincare_matrix.txt')
     fast_del =  not os.path.isfile('results\\one_period.txt') or os.remove('results\\one_period.txt')
-
         
     start = time.time()
     main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
-    print(time.time()-start)
+    print(f'Calculation time: {time.time()-start}')
     #main_single( system_type = Periodic_NA, system = LiNonDim2023 )
     #sample = Periodic_NA(LiNonDim2023())
     #print(sample.tf)

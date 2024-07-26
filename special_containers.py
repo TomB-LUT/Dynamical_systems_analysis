@@ -82,6 +82,7 @@ class PoincareMatrix:
             return False
 
     def periodicity_found(self, sample):
+        #print(sample.period.value)
         if not self.is_complete:
             return False
 
@@ -99,7 +100,7 @@ class PoincareMatrix:
                 
             if counter == cfg.poincare_iter:
                 sample.period = period
-                return period
+                return True
             
         else:
             self.remove_first()
@@ -114,9 +115,10 @@ class PoincareMatrix:
 
 class Marker:
     
-    def __init__(self,value,marker_list):
+    def __init__(self, name, value, marker_list):
+        self._name = name
         self._value = value
-        marker_list.append(self)
+        marker_list.append_marker(self)
 
     @property
     def value(self):
@@ -126,17 +128,6 @@ class Marker:
     def value(self,value):
         self._value = value
 
-    @classmethod
-    def marker(cls, integration_algorithm, yM, t, dtM, marker_list, Dyn_Sys): #Czy przez eval trzebaby liczyć charakterystyczne markery?
-        time_M = np.arange(t, t+(DynSys.tspan[3]*marker_list.period), dtM)
-        y_ref = yM[0]
-        yM_arr = np.zeros((len(time_M),sys_dim))
-
-        for i, tM in enumerate(time_M):
-            yM_arr[i,:] = yM
-            y_outM = integration_algorithm(self.RHS, yM, tM, dtM, self.par, self.tf_NA)
-            yM = y_outM 
-
 class MarkerList:
     def __init__(self):
         self.marker_list = []
@@ -144,8 +135,13 @@ class MarkerList:
     def append_marker(self,marker_object):
         self.marker_list.append(marker_object)
 
-    def return_markers(self):
-        return [marker.value for marker in self.marker_list]
+    def return_values(self):
+        return [marker._value for marker in self.marker_list]
+    
+    def return_names(self):
+        return [marker._name for marker in self.marker_list]
+    
+#Parameter też jako klas, ma name i value, klasa nazywa się par, w równaniach wtedy par.m1, name jako property które zwraca value
 
 
             

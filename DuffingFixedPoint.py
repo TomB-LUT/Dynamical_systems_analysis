@@ -10,8 +10,12 @@ class DuffingFixedPoint(MonteCarloSim):
         self.init_cond = self.set_IC()
     
     def set_par(self):
-        p1 = 0.1
+        rng = np.random.default_rng()
+        p1 = np.random.choice([0.1, 0.2, 0.3, 0.4, 0.5])
         return (p1,)
+    
+    def par_to_save(self):
+        return None
     
     @property
     def raw_f(self):
@@ -29,7 +33,7 @@ dydt = [y[1], -p1*y[1]+y[0]-pow(y[0],3)]
 
     def t_span(self):
         t0 = 0 
-        tf = 3000
+        tf = 300
         dt = 0.01
         return (t0,tf,dt)
     
