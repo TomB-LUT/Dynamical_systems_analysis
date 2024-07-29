@@ -1,7 +1,6 @@
 from MonteCarloSim import MonteCarloSim
 import numpy as np
 from math import pi, sqrt, cos
-from special_containers import Marker
 
 class LiNonDim2023(MonteCarloSim):
 
