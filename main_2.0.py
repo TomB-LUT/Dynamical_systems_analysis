@@ -1,6 +1,8 @@
 from Li_2023_nonDim import LiNonDim2023
 from DuffingFixedPoint import DuffingFixedPoint
-from SystemTypes import FixedPoint, Periodic_NA
+from AutonomusPendulum import AutonomusPendulum
+from RosslerSys import RooslerSystem
+from SystemTypes import FixedPoint, PeriodicNonAutonomus, PeriodicAutonomus
 import matplotlib.pyplot as plt
 import config2 as cfg
 import concurrent.futures 
@@ -31,19 +33,18 @@ def progress_indicator(result):
     if (cfg.no_of_sampels-completed) % cfg.report_samples == 0:
         print(f'Remaining tasks: {cfg.no_of_sampels-completed}')
 
-def execute_obj(system_type, system):
-    sample = system_type(system())
-    sample.integrate_julia()
+def execute_obj(system_type, system, use_julia):
+    sample = system_type(system(), use_julia)
+    sample.integrate_fixed_step()
     if cfg.no_of_sampels == 1:
         return sample.y_arr
     else: 
         return sample.marker_list
 
-
-def main_concurent(system_type, system):
+def main_concurent(system_type, system, use_julia=False):
     print(f'Remaining tasks: {cfg.no_of_sampels}')
     with concurrent.futures.ProcessPoolExecutor(max_workers=cfg.workers) as executor:
-        results = [executor.submit(execute_obj, system_type, system) for _ in range(cfg.no_of_sampels)]
+        results = [executor.submit(execute_obj, system_type, system, use_julia) for _ in range(cfg.no_of_sampels)]
         for result in results:
             result.add_done_callback(progress_indicator)
 
@@ -58,11 +59,11 @@ def main_concurent(system_type, system):
         save_marker([x.result() for x in concurrent.futures.as_completed(results)])
         print(f'save time: {time.time()-start1}')
 
-def main_single( system_type, system):
+def main_single( system_type, system, use_julia=False):
     start = time.time()
     try:
-        sample = system_type(system())
-        sample.integrate_julia()
+        sample = system_type(system(), use_julia)
+        sample.integrate_fixed_step()
     except NotImplementedError as e:
         print('Not all required methods implemented!!!!. Details: '.upper())
         print(e)
@@ -87,12 +88,7 @@ if __name__ == "__main__":
     fast_del =  not os.path.isfile('results\\one_period.txt') or os.remove('results\\one_period.txt')
         
     start = time.time()
-    main_concurent( system_type = Periodic_NA, system = LiNonDim2023 )
+    main_concurent( system_type = FixedPoint, system = DuffingFixedPoint)
     print(f'Calculation time: {time.time()-start}')
-    #main_single( system_type = Periodic_NA, system = LiNonDim2023 )
-    #sample = Periodic_NA(LiNonDim2023())
-    #print(sample.tf)
-    #print(sample.__dict__)
-    #sample.integrate_fixed_step()
-    #print(sample.__dict__)
+    #main_single( system_type = PeriodicAutonomus, system = RooslerSystem, use_julia=True)
     

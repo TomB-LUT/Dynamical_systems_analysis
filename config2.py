@@ -9,7 +9,7 @@ report_samples = 5_000
 Maxmaps = 20
 
 
-poincare_distance = 0.0005
+poincare_distance = 0.005
 workers = cpu_count()-5
 poincare_t = 0.5
 do_marker = True

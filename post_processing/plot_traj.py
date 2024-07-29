@@ -14,6 +14,7 @@ ofset = 0
 fig, ax = plt.subplots()
 #ax.scatter(a[bb:,0], a[bb:,1], s = 1, c = 'blue')
 ax.plot(a[ofset:,0], a[ofset:,1],c = 'blue')
+ax.scatter(a[ofset:,0], a[ofset:,1],c = 'blue',s=10)
 #ax.plot(aa[bb:,0], aa[bb:,1],linestyle='dashed',c = 'green')
 ax.scatter(b[:,0], b[:,1], c='red')
 plt.show()

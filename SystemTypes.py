@@ -9,31 +9,23 @@ Main.include('functions/rk4.jl')
 
 class LimitSet():
 
-    def __init__(self, DynSys):
+    def __init__(self, DynSys, use_julia ):
         self.init_cond = DynSys.init_cond
         self.par = DynSys.par
         self.RHS = DynSys.f
         self.sys_dim = len(self.init_cond) 
-        #self._marker_list = MarkerList()
         self._marker_list = {}
         self.parToSave = DynSys.par_to_save()
         self._t0 = DynSys.tspan[0] 
         self._tf = DynSys.tspan[1] 
         self._dt = DynSys.tspan[2]
-        #self._marker_list.append(self._t0)
-        #Marker('t0', self._t0, self._marker_list)
         self._marker_list['t0'] = self._t0
-        #self._marker_list.extend([x for x in self.init_cond])
-        #[Marker(str(f'y_{i+1}0'), x , self._marker_list) for i, x in enumerate(self.init_cond)]
         for i, ic in enumerate(self.init_cond):
             self._marker_list[f'y_{i+1}0'] = ic
-        #self._markers.update(dict( zip([str(f'y_{i+1}0') for i in range(self.sys_dim)], self.init_cond) ))
         if self.parToSave != None:
-            #self._marker_list.extend([self.par[x] for x in self.parToSave])
-            #[Marker(f'par_{x}', self.par[x] , self._marker_list) for x in self.parToSave]
-            #self._markers.update(dict( zip([str(f'par_{x}') for x in self.parToSave], [self.par[x] for x in self.parToSave]) ))
             for i in self.parToSave:
                 self._marker_list[f'par_{i}'] = self.par[i]
+        self.use_julia = use_julia
 
     @property
     def t0(self):
@@ -61,13 +53,7 @@ class LimitSet():
     
     @property
     def marker_list(self):
-        #return self._marker_list.return_values()
         return self._marker_list
-    
-    @property
-    def marker_names(self):
-        return self._marker_list.return_names()
-        #return list(self._markers.keys())
 
 
 class FixedPoint(LimitSet):
@@ -77,7 +63,13 @@ class FixedPoint(LimitSet):
     tspan[1] = tf
     tspan[2] = dt
     '''
+    
     def integrate_fixed_step(self):
+
+        if self.use_julia:
+            self.integrate_julia()
+            return
+        
         t_sim = np.arange(self._t0, self._t0 + self._tf , self._dt)
         y_arr = np.zeros((len(t_sim),self.sys_dim))
         y = self.init_cond
@@ -88,9 +80,6 @@ class FixedPoint(LimitSet):
             y = y_out
 
         self._y_arr = np.hstack((t_sim[:,np.newaxis],y_arr))
-        #self._marker_list.extend([round(x) for x in y_arr[-1,:]])
-        #[Marker(str(f'y_{i+1}_last'),round(x), self._marker_list) for i, x in enumerate(self._y_arr[-1,1:])]
-        #self._markers.update(dict( zip([str(f'y_{i+1}_last') for i in range(self.sys_dim)], [round(x) for x in y_arr[-1,:]] )))
         for i, ic in enumerate(self._y_arr[-1,1:]):
             self._marker_list[f'y_{i+1}_last'] = round(ic)
     
@@ -103,21 +92,127 @@ class FixedPoint(LimitSet):
         Main.dt = self.dt
 
         self._y_arr = Main.eval("integration(par, init_cond, t0, tf, dt)")
-        #self._marker_list.extend([round(x) for x in self._y_arr[-1,1:]])
-        #[Marker(str(f'y_{i+1}_last'),round(x), self._marker_list) for i, x in enumerate(self._y_arr[-1,1:])]
-        #self._markers.update(dict( zip([str(f'y_{i+1}_last') for i in range(self.sys_dim)], [round(x) for x in self._y_arr[-1,1:]] )))
-        #Bez zip przez enumerate można to zrobić tworzyć za każdym razem tylko pojdeynczy słownik i dodawać 
         for i, ic in enumerate(self._y_arr[-1,1:]):
             self._marker_list[f'y_{i+1}_last'] = round(ic)
 
     @property
     def y_arr(self):
-        #print( dict(zip(self._marker_list.return_names(), self._marker_list.return_values())) )
         print(self._marker_list)
         return self._y_arr
+    
+class PeriodicAutonomus(LimitSet):
+
+    def __init__(self, DynSys, use_julia):
+        super().__init__(DynSys, use_julia)
+        self.poincare_matrix = PoincareMatrix(self.sys_dim)
+        self.period = -1
+        self.period_of_system = None
+        self._marker_list['empty_marker'] = 0
+        self._marker_list['period'] = self.period
+        self._marker_list['well'] = -1
+        self.attractor = 0 
+        for i in range(self.sys_dim):
+            self._marker_list[f'max_y{i+1}'] = -1000
+            self._marker_list[f'min_y{i+1}'] = 1000
+        self._marker_list['attractor'] = 0
+
+    def integrate_fixed_step(self):
+        
+        if self.use_julia:
+            self.integrate_julia()
+        
+        t_sim = np.arange(self.t0, self.t0+self.tf ,self.dt)
+        y_arr = np.zeros((len(t_sim),self.sys_dim))
+        y = self.init_cond
+        
+        for i,t in enumerate(t_sim):
+            y_arr[i,:] = y
+            y_out = rk4_np(self.RHS, y, t, self.dt, self.par, self.tf)
+            if cfg.error_check and y_out[0] > 1_000:
+                if self.parToSave != None:
+                    print(f'Possible RuntimeWarning for {[self.par[x] for x in self.parToSave]}, check time step size')
+                else:
+                    print(f'Possible RuntimeWarning for {self.par}')
+
+                break
+
+            if t > cfg.poincare_t*self.tf and PoincareMatrix.flag(self, y_out, y, i):
+                if self.period_of_system == None:
+                    dt_p = self.dt*(y[0]/(y[0]-y_out[0]))
+                    y_out_p = rk4_np(self.RHS, y, t, dt_p, self.par, self.tf)
+                    self.poincare_matrix.push([t+self.dt/2,*y_out_p])
+                else: 
+                    self.poincare_matrix.push([t,*y])
+
+            if self.poincare_matrix.periodicity_found(self):
+                if cfg.no_of_sampels == 1:
+                    self.poincare_matrix.save_to_txt()
+                self.marker(rk4_np, y_out, t+self.dt, self.dt)
+                t_sim = t_sim[0:i]
+                y_arr = y_arr[0:i]
+                self._marker_list['period'] = self.period
+                break
+
+            y = y_out
+            
+        self._y_arr = np.hstack((t_sim[:,np.newaxis],y_arr))
+        
+        if cfg.no_of_sampels == 1:
+            self.poincare_matrix.save_to_txt()
+
+    def integrate_julia(self):
+        Main.par = self.par
+        Main.init_cond = self.init_cond
+        Main.t0 = self.t0
+        Main.tf = self.t0+self.tf
+        Main.dt = self.dt
+        res = Main.eval("integration(par, init_cond, t0, tf, dt)")
+        self.t0, *self.init_cond = res[-1,:]     
+        #self.integrate_fixed_step()
+
+    @property
+    def y_arr(self):
+        print(self._marker_list)
+        return self._y_arr
+    
+    def marker(self, integration_algorithm, yM, t, dtM):
+
+        time_M = np.arange(t, t+(self.period_of_system*self.period), dtM)
+        yM_arr = np.zeros((len(time_M),self.sys_dim))
+
+        for i, tM in enumerate(time_M):
+            yM_arr[i,:] = yM
+            y_outM = integration_algorithm(self.RHS, yM, tM, dtM, self.par, self.tf)
+            yM = y_outM 
+
+            self._marker_list['attractor'] += y_outM[0]
+            
+            for i in range(self.sys_dim):
+                if y_outM[i] > self._marker_list[f'max_y{i+1}']:
+                    self._marker_list[f'max_y{i+1}'] = y_outM[i]
+                if y_outM[i] < self._marker_list[f'min_y{i+1}']:
+                    self._marker_list[f'min_y{i+1}'] = y_outM[i]
+
+        yM_arr = np.hstack((time_M[:,np.newaxis],yM_arr))
+        if cfg.no_of_sampels == 1:
+            np.savetxt('results\\one_period.txt', yM_arr, delimiter=' ', fmt='%.6f')
+
+class PeriodicNonAutonomus(PeriodicAutonomus):
+
+    def __init__(self, DynSys, use_julia):
+        super().__init__(DynSys, use_julia)
+        self.period_of_system = DynSys.tspan[3] 
+        self._marker_list['empty_marker'] = 0
+        self._marker_list['well'] = -1
+        self.step = self._dt
+        self._dt = self.period_of_system/self._dt
+        self._tf = self._tf*self.period_of_system 
 
 
-class Periodic_NA(LimitSet):
+
+"""
+
+class PeriodicNonAutonomus(LimitSet):
     '''
     For Periodic_NA the tspan list is: 
     tspan[0] = t0
@@ -129,18 +224,12 @@ class Periodic_NA(LimitSet):
         super().__init__(DynSys)
         self.period_of_system = DynSys.tspan[3] 
         self.poincare_matrix = PoincareMatrix(self.sys_dim)
-        #self.period = Marker('period', -1, self._marker_list)
         self.period = -1
         self._marker_list['empty_marker'] = 0
         self._marker_list['period'] = self.period
-        #self.well = Marker('well', -1, self._marker_list)
         self._marker_list['well'] = -1
-        self.attractor = 0 #To poprostu może stwórz klase macierz markerów i bedzie dodawana. A może instacje markera zrobić jak obserwatorów
+        self.attractor = 0 
         for i in range(self.sys_dim):
-            #setattr(self, str(f'max_y{i}'), -1000)
-            #setattr(self, str(f'min_y{i}'), 1000)
-            #setattr(self, str(f'max_y{i}'),  Marker(str(f'max_y{i}'), -1000, self._marker_list))
-            #setattr(self, str(f'min_y{i}'), Marker(str(f'min_y{i}'), 1000, self._marker_list))
             self._marker_list[f'max_y{i+1}'] = -1000
             self._marker_list[f'min_y{i+1}'] = 1000
         self._marker_list['attractor'] = 0
@@ -157,17 +246,7 @@ class Periodic_NA(LimitSet):
     def step(self):
         return self._dt
 
-    def integrate_fixed_step(self, start_time = None, start_y_arr = None):
-        '''
-        if start_time == None:
-            t_sim = np.arange(self.t0, self.t0+self.tf_NA ,self.dt_NA)
-        else: 
-            t_sim = np.arange(start_time, start_time+round(self.tf_NA/20) ,self.dt_NA)
-
-        if not isinstance(start_y_arr,np.ndarray):
-            y = self.init_cond
-        else: 
-            y = start_y_arr'''
+    def integrate_fixed_step(self):
         t_sim = np.arange(self.t0, self.t0+self.tf_NA ,self.dt_NA)
         y_arr = np.zeros((len(t_sim),self.sys_dim))
         y = self.init_cond
@@ -175,11 +254,14 @@ class Periodic_NA(LimitSet):
         for i,t in enumerate(t_sim):
             y_arr[i,:] = y
             y_out = rk4_np(self.RHS, y, t, self.dt_NA, self.par, self.tf_NA)
-            if cfg.error_check and y_out[0] > 1_000:
-                print(f'Possible RuntimeWarning dla za mały czas całkowania dla {[self.par[x] for x in self.parToSave]}, sprawdź czy nie za mała wartość threshold, RuntimeWarning są wyłączone')
+            if cfg.error_check and y_out[0] > 5_000:
+                try:
+                    print(f'Possible RuntimeWarning za mały czas całkowania dla {[self.par[x] for x in self.parToSave]}, sprawdź czy nie za mała wartość threshold, RuntimeWarning są wyłączone')
+                except TypeError as e:
+                    print(f'Raise type error when y_out enormusly big. Details: {e}')
                 break
 
-            if t > cfg.poincare_t*self.tf_NA and i%self.step == 0:
+            if t > cfg.poincare_t*self.tf_NA and self.poincare_condition(i):
                 self.poincare_matrix.push([t,*y])
 
             if self.poincare_matrix.periodicity_found(self):
@@ -192,13 +274,6 @@ class Periodic_NA(LimitSet):
             y = y_out
             
         self._y_arr = np.hstack((t_sim[:,np.newaxis],y_arr))
-        
-        #self._marker_list.append(self.period)
-        #self._marker_list.append(self.well)
-        #for i in range(self.sys_dim):
-        #    self._marker_list.append( getattr(self, str(f'max_y{i}')) )
-        #    self._marker_list.append( getattr(self, str(f'min_y{i}')) )
-        #self._marker_list.append(self.attractor)
         
         if cfg.no_of_sampels == 1:
             self.poincare_matrix.save_to_txt()
@@ -215,8 +290,6 @@ class Periodic_NA(LimitSet):
 
     @property
     def y_arr(self):
-        #print(self._marker_list)
-        #print( dict(zip(self._marker_list.return_names(), self._marker_list.return_values())) )
         print(self._marker_list)
         return self._y_arr
 
@@ -236,28 +309,17 @@ class Periodic_NA(LimitSet):
             cond = y_ref*y_outM[0] < 0 or self._marker_list['well'] == 2
             self._marker_list['well'] = 2 if cond else 1 
             
-            #inst_energy = y_outM[2]*y_outM[2]* self.par[5] * dtM + y_outM[2]*y_outM[2]* self.par[5] * dtM # I^2 * R * delta_t
-            #self.total_energy += inst_energy
-
-            #for i in range(self.sys_dim):
-            #    if y_outM[i] > getattr(self, str(f'max_y{i}')).value:
-            #        setattr(self, str(f'max_y{i}'), Marker(str(f'max_y{i}'), y_outM[i], self._marker_list))
-            #    if y_outM[i] < getattr(self, str(f'min_y{i}')).value:
-            #        setattr(self, str(f'min_y{i}'), Marker(str(f'min_y{i}'), y_outM[i], self._marker_list))
             for i in range(self.sys_dim):
                 if y_outM[i] > self._marker_list[f'max_y{i+1}']:
                     self._marker_list[f'max_y{i+1}'] = y_outM[i]
                 if y_outM[i] < self._marker_list[f'min_y{i+1}']:
                     self._marker_list[f'min_y{i+1}'] = y_outM[i]
-            
 
-
-        yM_arr = np.hstack((time_M[:,np.newaxis],yM_arr))
         if cfg.no_of_sampels == 1:
+            yM_arr = np.hstack((time_M[:,np.newaxis],yM_arr))
             np.savetxt('results\\one_period.txt', yM_arr, delimiter=' ', fmt='%.6f')
 
+    def poincare_condition(self, i):
+        return i%self.step == 0
 
-
-
-    
-
+"""

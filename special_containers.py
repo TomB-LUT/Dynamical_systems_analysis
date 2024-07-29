@@ -20,6 +20,13 @@ class PoincareMatrix:
 
     def __str__(self):
         return f'{[ print(["{:10.5f}".format(e) for e in row]) for row in self.p_mat ]}'
+    
+    @staticmethod
+    def flag(sample, state_vars, state_vars_old, i):
+        if sample.period_of_system == None:
+            return state_vars[0]*state_vars_old[0] < 0 and state_vars[1] > 0
+        else: 
+            return i%sample.step == 0
 
     def push(self,vector):
         if len(vector) != len(self.p_mat):
@@ -100,6 +107,8 @@ class PoincareMatrix:
                 
             if counter == cfg.poincare_iter:
                 sample.period = period
+                if sample.period_of_system == None:
+                    sample.period_of_system = np.average(np.diff(self.p_mat[0]))
                 return True
             
         else:
